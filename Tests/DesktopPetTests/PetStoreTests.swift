@@ -234,6 +234,30 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(chunks.joined(), expected)
     }
 
+    func testDesktopPetAppIconUsesBundledPNGResource() throws {
+        let url = try XCTUnwrap(DesktopPetAppIcon.resourceURL())
+        XCTAssertEqual(url.lastPathComponent, "DesktopPetIcon.png")
+        XCTAssertNotNil(DesktopPetAppIcon.iconImage(resourceURL: url))
+    }
+
+    func testDesktopPetAppIconLoadsImageFromURL() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "test-icon.png", directoryHint: .notDirectory)
+        let image = NSImage(size: NSSize(width: 2, height: 2))
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: 2, height: 2).fill()
+        image.unlockFocus()
+        let tiffData = try XCTUnwrap(image.tiffRepresentation)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiffData))
+        let pngData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try pngData.write(to: url)
+        let loadedImage = try XCTUnwrap(DesktopPetAppIcon.iconImage(resourceURL: url))
+        XCTAssertEqual(Int(loadedImage.size.width), 2)
+        XCTAssertEqual(Int(loadedImage.size.height), 2)
+    }
+
     func testOpenAICompatibleRequestBuilderCreatesMiniMaxChatCompletionRequest() throws {
         let config = OpenAICompatibleChatConfiguration(
             baseURL: URL(string: "https://api.minimax.io/v1")!,
