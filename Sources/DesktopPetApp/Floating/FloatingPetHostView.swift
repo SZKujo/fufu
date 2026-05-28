@@ -78,7 +78,7 @@ struct FloatingPetHostView: View {
     private func sendMessage() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            controller.latestReply = "\(pet.name)歪头看着你：\(pet.catchphrase)。"
+            controller.latestReply = "\(pet.name)歪头看着你：我在。"
             return
         }
 
@@ -147,7 +147,7 @@ private struct DesktopBubbleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(latestReply.isEmpty ? "\(pet.name)：\(pet.catchphrase)" : latestReply)
+            Text(latestReply.isEmpty ? "\(pet.name)：我在。" : latestReply)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(3)

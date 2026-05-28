@@ -24,15 +24,15 @@ public struct LocalMockChatProvider: ChatProvider {
     public func reply(to input: String, pet: PetProfile, history: [ChatTurn]) async -> String {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty {
-            return "\(pet.name)歪头看着你：\(pet.catchphrase)。"
+            return "\(pet.name)歪头看着你：我在。"
         }
 
         let lowercased = text.lowercased()
         let reply: String
         if text.contains("累") || text.contains("烦") || text.contains("难") {
-            reply = "\(pet.name)蹭蹭你：先喘口气，我陪你拆小一点。\(pet.catchphrase)"
+            reply = "\(pet.name)蹭蹭你：先喘口气，我陪你拆小一点。"
         } else if text.contains("你好") || lowercased.contains("hello") || lowercased.contains("hi") {
-            reply = "\(pet.name)摇摇尾巴：\(pet.catchphrase)，今天也一起待会儿。"
+            reply = "\(pet.name)摇摇尾巴：今天也一起待会儿。"
         } else if text.contains("代码") || lowercased.contains("code") {
             reply = "\(pet.name)眨眨眼：代码慢慢写，我负责看住你的耐心。"
         } else if text.contains("吃") || text.contains("饿") {
@@ -48,11 +48,11 @@ public struct LocalMockChatProvider: ChatProvider {
 
     private func fallbackReply(for pet: PetProfile, seed: Int) -> String {
         let options = [
-            "\(pet.name)歪头：\(pet.catchphrase)，这听起来有点意思。",
+            "\(pet.name)歪头：这听起来有点意思。",
             "\(pet.name)趴在旁边：我记住啦，继续说给我听。",
             "\(pet.name)轻轻点头：嗯嗯，我站你这边。",
             "\(pet.name)甩甩尾巴：那我们先做最小的一步。",
-            "\(pet.name)眨眼：\(pet.personality)模式启动。"
+            "\(pet.name)眨眼：设定模式启动。"
         ]
         return options[abs(seed) % options.count]
     }

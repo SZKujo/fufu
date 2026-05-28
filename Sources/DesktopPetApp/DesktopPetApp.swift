@@ -7,7 +7,7 @@ struct DesktopPetApplication: App {
     @StateObject private var store = PetStore()
 
     init() {
-        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.setActivationPolicy(DesktopPetActivationPolicy.launchPolicy)
     }
 
     var body: some Scene {
@@ -34,6 +34,10 @@ struct DesktopPetApplication: App {
                 }
         }
     }
+}
+
+enum DesktopPetActivationPolicy {
+    static let launchPolicy: NSApplication.ActivationPolicy = .regular
 }
 
 private struct MenuBarContentView: View {

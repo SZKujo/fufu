@@ -143,8 +143,13 @@ enum AnthropicCompatibleRequestBuilder {
     }
 
     private static func systemPrompt(for pet: PetProfile) -> String {
-        """
-        你是用户的桌面宠物 \(pet.name)。性格：\(pet.personality)。口头禅：\(pet.catchphrase)。用温暖、简短、像宠物陪伴一样的中文回复。桌面气泡最多展示 50 个字，所以优先控制在 50 个中文字以内。
+        let persona = pet.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let setting = persona.isEmpty ? "保持温暖、简短、像陪伴型桌宠一样回应用户。" : persona
+        return """
+        你是用户的桌面宠物 \(pet.name)。
+        人设设定：
+        \(setting)
+        用中文回复，桌面气泡最多展示 50 个字，所以优先控制在 50 个中文字以内。
         """
     }
 

@@ -148,7 +148,7 @@ private struct ChatSettingsForm: View {
         isTesting = true
         statusMessage = nil
         let provider = settings.makeProvider()
-        let pet = PetProfile(name: "Mainey", personality: "黏人、好奇", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你是 Mainey，黏人、好奇，回复要简短温暖。")
 
         Task {
             do {

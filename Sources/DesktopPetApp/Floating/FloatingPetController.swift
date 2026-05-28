@@ -29,7 +29,7 @@ final class FloatingPetController: ObservableObject {
 
         let panel = panel ?? FloatingPetPanel(
             contentRect: frame,
-            styleMask: [.borderless, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -87,8 +87,6 @@ final class FloatingPetController: ObservableObject {
     }
 
     func focusForTyping() {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
         panel?.allowsKeyInput = true
         panel?.makeKeyAndOrderFront(nil)
     }
@@ -184,6 +182,7 @@ final class FloatingPetPanel: NSPanel {
     override var canBecomeMain: Bool { allowsKeyInput }
 
     func configureForDesktopPet() {
+        styleMask.insert(.nonactivatingPanel)
         allowsKeyInput = false
         isOpaque = false
         backgroundColor = .clear
@@ -191,7 +190,7 @@ final class FloatingPetPanel: NSPanel {
         animationBehavior = .none
         hidesOnDeactivate = false
         level = .screenSaver
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         isReleasedWhenClosed = false
         acceptsMouseMovedEvents = true
     }

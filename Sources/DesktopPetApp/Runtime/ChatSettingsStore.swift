@@ -49,7 +49,7 @@ final class ChatSettingsStore: ObservableObject {
     @Published private(set) var hasAPIKey: Bool
 
     private let defaults: UserDefaults
-    private let keychain: APIKeychain
+    private let apiKeyCache: APIKeyCache
     private let hasAPIKeyDefaultsKey = "chat.hasAPIKey"
 
     init(
@@ -57,7 +57,7 @@ final class ChatSettingsStore: ObservableObject {
         keychain: APIKeychain = .live
     ) {
         self.defaults = defaults
-        self.keychain = keychain
+        apiKeyCache = APIKeyCache(keychain: keychain)
         let storedMode = ChatProviderMode(rawValue: defaults.string(forKey: "chat.mode") ?? "") ?? .localMock
         mode = storedMode
         baseURL = defaults.string(forKey: "chat.baseURL") ?? storedMode.defaultBaseURL
@@ -66,6 +66,9 @@ final class ChatSettingsStore: ObservableObject {
     }
 
     func makeProvider() -> any ChatProvider {
+        let cachedAPIKeyProvider: @Sendable () throws -> String = { [apiKeyCache] in
+            try apiKeyCache.readAPIKey()
+        }
         switch mode {
         case .localMock:
             return LocalMockChatProvider()
@@ -74,25 +77,25 @@ final class ChatSettingsStore: ObservableObject {
                 baseURL: URL(string: baseURL) ?? AnthropicCompatibleRequestBuilder.defaultBaseURL,
                 apiKey: "",
                 model: normalizedModel
-            ), apiKeyProvider: keychain.readAPIKey)
+            ), apiKeyProvider: cachedAPIKeyProvider)
         case .openAICompatible:
             return OpenAICompatibleChatProvider(configuration: OpenAICompatibleChatConfiguration(
                 baseURL: URL(string: baseURL) ?? URL(string: "https://api.minimax.io/v1")!,
                 apiKey: "",
                 model: normalizedModel
-            ), apiKeyProvider: keychain.readAPIKey)
+            ), apiKeyProvider: cachedAPIKeyProvider)
         }
     }
 
     func saveAPIKey(_ apiKey: String) throws {
-        try keychain.saveAPIKey(apiKey)
+        try apiKeyCache.saveAPIKey(apiKey)
         hasAPIKey = !apiKey.isEmpty
         defaults.set(hasAPIKey, forKey: hasAPIKeyDefaultsKey)
         defaults.set(hasAPIKey, forKey: "chat.hasAPIKey.keychain")
     }
 
     func clearAPIKey() throws {
-        try keychain.deleteAPIKey()
+        try apiKeyCache.clearAPIKey()
         hasAPIKey = false
         defaults.set(false, forKey: hasAPIKeyDefaultsKey)
         defaults.set(false, forKey: "chat.hasAPIKey.keychain")
@@ -122,6 +125,41 @@ final class ChatSettingsStore: ObservableObject {
         }
     }
 
+}
+
+final class APIKeyCache: @unchecked Sendable {
+    private let keychain: APIKeychain
+    private let lock = NSLock()
+    private var cachedAPIKey: String?
+
+    init(keychain: APIKeychain) {
+        self.keychain = keychain
+    }
+
+    func readAPIKey() throws -> String {
+        try lock.withLock {
+            if let cachedAPIKey {
+                return cachedAPIKey
+            }
+            let apiKey = try keychain.readAPIKey()
+            cachedAPIKey = apiKey
+            return apiKey
+        }
+    }
+
+    func saveAPIKey(_ apiKey: String) throws {
+        try keychain.saveAPIKey(apiKey)
+        lock.withLock {
+            cachedAPIKey = apiKey
+        }
+    }
+
+    func clearAPIKey() throws {
+        try keychain.deleteAPIKey()
+        lock.withLock {
+            cachedAPIKey = ""
+        }
+    }
 }
 
 struct APIKeychain: Sendable {

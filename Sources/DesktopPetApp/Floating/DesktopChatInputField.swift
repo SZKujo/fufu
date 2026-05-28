@@ -80,9 +80,10 @@ enum DesktopInputFocusRetryPolicy {
     static func shouldRetry(
         isApplicationActive: Bool,
         isWindowKey: Bool,
-        didAcceptFirstResponder: Bool
+        didAcceptFirstResponder: Bool,
+        allowsNonActiveApplication: Bool = false
     ) -> Bool {
-        !isApplicationActive || !isWindowKey || !didAcceptFirstResponder
+        (!allowsNonActiveApplication && !isApplicationActive) || !isWindowKey || !didAcceptFirstResponder
     }
 }
 
@@ -95,12 +96,15 @@ private enum DesktopTextInputFocusCoordinator {
     }
 
     private static func focus(_ textField: NSTextField, remainingDelays: [TimeInterval]) {
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-
         guard let window = textField.window else {
             scheduleNextFocus(for: textField, remainingDelays: remainingDelays)
             return
+        }
+
+        let allowsNonActiveApplication = window.styleMask.contains(.nonactivatingPanel)
+        if !allowsNonActiveApplication {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
         }
 
         if let panel = window as? FloatingPetPanel {
@@ -113,7 +117,8 @@ private enum DesktopTextInputFocusCoordinator {
         if DesktopInputFocusRetryPolicy.shouldRetry(
             isApplicationActive: NSApp.isActive,
             isWindowKey: window.isKeyWindow,
-            didAcceptFirstResponder: didAcceptFirstResponder
+            didAcceptFirstResponder: didAcceptFirstResponder,
+            allowsNonActiveApplication: allowsNonActiveApplication
         ) {
             scheduleNextFocus(for: textField, remainingDelays: remainingDelays)
         }

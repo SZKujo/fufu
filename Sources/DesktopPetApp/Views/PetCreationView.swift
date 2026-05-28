@@ -6,11 +6,14 @@ struct PetCreationView: View {
     @EnvironmentObject private var store: PetStore
 
     @State private var name = ""
-    @State private var personality = "黏人、好奇、会鼓励人"
-    @State private var catchphrase = "喵呜"
+    @State private var prompt = ""
     @State private var selectedAssetURL: URL?
     @State private var isImporterPresented = false
     @State private var errorMessage: String?
+
+    private var isPromptTooLong: Bool {
+        prompt.count > PetPromptText.maximumLength
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -23,9 +26,17 @@ struct PetCreationView: View {
 
             Form {
                 TextField("名字", text: $name)
-                TextField("性格", text: $personality, axis: .vertical)
-                    .lineLimit(2...3)
-                TextField("口头禅", text: $catchphrase)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("设定")
+                        .font(.callout.weight(.medium))
+                    TextEditor(text: $prompt)
+                        .frame(minHeight: 120)
+                        .scrollContentBackground(.hidden)
+                        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                    Text("\(prompt.count)/\(PetPromptText.maximumLength)")
+                        .font(.caption)
+                        .foregroundStyle(isPromptTooLong ? .red : .secondary)
+                }
 
                 Button {
                     isImporterPresented = true
@@ -33,7 +44,7 @@ struct PetCreationView: View {
                     Label(selectedAssetURL == nil ? "选择 Sprite 图" : "已选择 Sprite 图", systemImage: "photo.on.rectangle.angled")
                 }
 
-                Text(selectedAssetURL?.lastPathComponent ?? "不选择时会使用 Mainey 示例 spritesheet")
+                Text(selectedAssetURL?.lastPathComponent ?? "未选择素材")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -58,6 +69,7 @@ struct PetCreationView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .disabled(isPromptTooLong)
         }
         .fileImporter(
             isPresented: $isImporterPresented,
@@ -76,20 +88,29 @@ struct PetCreationView: View {
 
     private func createPet() {
         do {
-            let needsAccess = selectedAssetURL?.startAccessingSecurityScopedResource() ?? false
+            guard !isPromptTooLong else {
+                throw PetValidationError.promptTooLong
+            }
+            guard let selectedAssetURL else {
+                errorMessage = "请选择 Sprite 图。"
+                return
+            }
+
+            let needsAccess = selectedAssetURL.startAccessingSecurityScopedResource()
             defer {
                 if needsAccess {
-                    selectedAssetURL?.stopAccessingSecurityScopedResource()
+                    selectedAssetURL.stopAccessingSecurityScopedResource()
                 }
             }
 
             try store.createPet(
                 name: name,
-                personality: personality,
-                catchphrase: catchphrase,
+                prompt: prompt,
                 sourceURL: selectedAssetURL
             )
             name = ""
+            prompt = ""
+            self.selectedAssetURL = nil
             errorMessage = nil
             runtime.refreshFloatingPet()
         } catch {

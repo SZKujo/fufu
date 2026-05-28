@@ -26,6 +26,7 @@ final class PetStore: ObservableObject {
         self.modelContext = ModelContext(modelContainer)
         self.legacyJSONURL = legacyJSONURL
         migrateLegacyJSONIfNeeded()
+        normalizeLegacySettingsIfNeeded()
         reload()
     }
 
@@ -40,8 +41,8 @@ final class PetStore: ObservableObject {
             let assetFileName = try PetAssetManager.installBundledMaineyIfNeeded()
             let pet = PetEntity(
                 name: "Mainey",
-                personality: "黏人、好奇、会在你写东西时安静陪着你",
-                catchphrase: "喵呜",
+                personality: Self.defaultMaineyPrompt,
+                catchphrase: "",
                 assetFileName: assetFileName,
                 assetKind: .spriteSheet,
                 isActive: true,
@@ -58,8 +59,7 @@ final class PetStore: ObservableObject {
     @discardableResult
     func createPet(
         name: String,
-        personality: String,
-        catchphrase: String,
+        prompt: String,
         sourceURL: URL?
     ) throws -> PetRecord {
         let assetFileName: String
@@ -71,16 +71,23 @@ final class PetStore: ObservableObject {
 
         let pet = PetEntity(
             name: cleaned(name, fallback: "新宠物"),
-            personality: cleaned(personality, fallback: "温柔、好奇"),
-            catchphrase: cleaned(catchphrase, fallback: "在呢"),
+            personality: try cleanedPrompt(prompt),
+            catchphrase: "",
             assetFileName: assetFileName,
             assetKind: .spriteSheet,
             isActive: pets.isEmpty
         )
-        appendMessageEntity(.pet, text: "\(pet.name)探出头：\(pet.catchphrase)，以后请多关照。", to: pet)
+        appendMessageEntity(.pet, text: "\(pet.name)探出头：以后请多关照。", to: pet)
         modelContext.insert(pet)
         try saveAndReload()
         return PetRecord(entity: pet)
+    }
+
+    func updatePetSettings(_ petID: UUID, name: String, prompt: String) throws {
+        guard let pet = try fetchPetEntity(id: petID) else { return }
+        pet.name = cleaned(name, fallback: "新宠物")
+        pet.prompt = try cleanedPrompt(prompt)
+        try saveAndReload()
     }
 
     func setActive(_ petID: UUID) {
@@ -215,14 +222,60 @@ final class PetStore: ObservableObject {
         }
     }
 
+    private func normalizeLegacySettingsIfNeeded() {
+        do {
+            var didChange = false
+            for pet in try fetchPetEntities() where !pet.catchphrase.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                pet.prompt = PetPromptText.legacyPrompt(
+                    name: pet.name,
+                    personality: pet.personality,
+                    catchphrase: pet.catchphrase
+                )
+                didChange = true
+            }
+            if didChange {
+                try modelContext.save()
+            }
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
     private func cleaned(_ value: String, fallback: String) -> String {
         let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? fallback : text
     }
 
+    private func cleanedPrompt(_ value: String) throws -> String {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count <= PetPromptText.maximumLength else {
+            throw PetValidationError.promptTooLong
+        }
+        return text
+    }
+
     private static func defaultLegacyJSONURL() -> URL {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return root.appending(path: "DesktopPet/pets.json", directoryHint: .notDirectory)
+    }
+
+    private static let defaultMaineyPrompt = """
+    你是 Mainey，一只像 Codex 桌宠一样陪在用户屏幕上的小猫。
+    你黏人、好奇、会在用户写代码或工作时安静陪伴。
+    回复要温暖、简短、有一点猫咪感，但不要过度卖萌。
+    当用户焦虑或卡住时，帮用户把事情拆小一点，像可靠的小伙伴一样鼓励 TA。
+    """
+}
+
+enum PetValidationError: LocalizedError {
+    case promptTooLong
+
+    var errorDescription: String? {
+        switch self {
+        case .promptTooLong:
+            "设定最多 2000 字。"
+        }
     }
 }
 
@@ -231,8 +284,8 @@ private extension PetEntity {
         self.init(
             id: record.id,
             name: record.name,
-            personality: record.personality,
-            catchphrase: record.catchphrase,
+            personality: record.prompt,
+            catchphrase: "",
             assetFileName: record.assetFileName,
             assetKind: record.assetKind,
             spriteSpecID: record.spriteSpecID,

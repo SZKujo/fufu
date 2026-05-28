@@ -38,6 +38,7 @@ private struct PetsPageView: View {
     @EnvironmentObject private var store: PetStore
     @State private var selectedPetID: UUID?
     @State private var isAssetPreviewExpanded = false
+    @State private var editingPet: PetRecord?
 
     private var selectedPet: PetRecord? {
         if let selectedPetID, let pet = store.pet(with: selectedPetID) {
@@ -83,7 +84,9 @@ private struct PetsPageView: View {
                 } else {
                     List {
                         ForEach(store.pets) { pet in
-                            PetListRow(pet: pet)
+                            PetListRow(pet: pet) {
+                                editingPet = pet
+                            }
                                 .deleteDisabled(pet.isProtectedDefault)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -116,6 +119,18 @@ private struct PetsPageView: View {
                 }
             }
         }
+        .sheet(item: $editingPet) { pet in
+            PetSettingsEditorView(
+                pet: pet,
+                store: store,
+                onSave: {
+                    runtime.refreshFloatingPet()
+                    if selectedPetID == pet.id {
+                        selectedPetID = pet.id
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -143,6 +158,7 @@ private struct PetListRow: View {
     @EnvironmentObject private var runtime: AppRuntime
     @EnvironmentObject private var store: PetStore
     let pet: PetRecord
+    let edit: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -162,11 +178,11 @@ private struct PetListRow: View {
                             .foregroundStyle(.green)
                     }
                 }
-                Text(pet.personality)
+                Text(pet.prompt.isEmpty ? "未填写设定" : pet.prompt)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Text("口头禅：\(pet.catchphrase)")
+                    .lineLimit(2)
+                Text("素材：\(pet.assetFileName)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -189,6 +205,11 @@ private struct PetListRow: View {
                 }
             }
 
+            Button(action: edit) {
+                Label("修改设定", systemImage: "pencil")
+            }
+            .help("修改名字和人设提示词")
+
             Button {
                 store.delete(pet.id)
                 runtime.refreshFloatingPet()
@@ -199,5 +220,94 @@ private struct PetListRow: View {
             .help(pet.isProtectedDefault ? "默认桌宠不可删除" : "移除这只宠物")
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct PetSettingsEditorView: View {
+    let pet: PetRecord
+    @ObservedObject var store: PetStore
+    let onSave: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var prompt: String
+    @State private var errorMessage: String?
+
+    private var isPromptTooLong: Bool {
+        prompt.count > PetPromptText.maximumLength
+    }
+
+    init(pet: PetRecord, store: PetStore, onSave: @escaping () -> Void) {
+        self.pet = pet
+        self.store = store
+        self.onSave = onSave
+        _name = State(initialValue: pet.name)
+        _prompt = State(initialValue: pet.prompt)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("修改设定")
+                    .font(.title2.weight(.semibold))
+                Text("只修改名字和人设提示词，素材保持不变。")
+                    .foregroundStyle(.secondary)
+            }
+
+            Form {
+                TextField("名字", text: $name)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("设定")
+                        .font(.callout.weight(.medium))
+                    TextEditor(text: $prompt)
+                        .frame(minHeight: 180)
+                        .scrollContentBackground(.hidden)
+                        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+                    HStack {
+                        Text("\(prompt.count)/\(PetPromptText.maximumLength)")
+                            .foregroundStyle(isPromptTooLong ? .red : .secondary)
+                        Spacer()
+                        Text("素材：\(pet.assetFileName)")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .font(.caption)
+                }
+            }
+            .formStyle(.grouped)
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                Spacer()
+                Button("取消") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Button("保存") {
+                    save()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isPromptTooLong)
+            }
+        }
+        .padding(22)
+        .frame(width: 560)
+        .frame(minHeight: 460)
+    }
+
+    private func save() {
+        do {
+            try store.updatePetSettings(pet.id, name: name, prompt: prompt)
+            onSave()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

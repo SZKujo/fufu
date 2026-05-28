@@ -18,6 +18,26 @@ enum PetAssetKind: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum PetPromptText {
+    static let maximumLength = 2_000
+
+    static func legacyPrompt(name: String, personality: String, catchphrase: String) -> String {
+        let personality = personality.trimmingCharacters(in: .whitespacesAndNewlines)
+        let catchphrase = catchphrase.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "这只桌面宠物" : name
+
+        var parts = ["你是用户的桌面宠物 \(displayName)。"]
+        if !personality.isEmpty {
+            parts.append("性格与行为：\(personality)。")
+        }
+        if !catchphrase.isEmpty {
+            parts.append("你可以自然地使用口头禅「\(catchphrase)」。")
+        }
+        parts.append("回复要温暖、简短、像陪伴型桌宠。")
+        return parts.joined(separator: "\n")
+    }
+}
+
 struct PetRecord: Identifiable, Codable, Equatable {
     var id: UUID
     var name: String
@@ -37,8 +57,7 @@ struct PetRecord: Identifiable, Codable, Equatable {
     init(
         id: UUID = UUID(),
         name: String,
-        personality: String,
-        catchphrase: String,
+        prompt: String,
         assetFileName: String,
         assetKind: PetAssetKind,
         spriteSpecID: String = SpriteSheetSpec.codexMainey.id,
@@ -52,8 +71,8 @@ struct PetRecord: Identifiable, Codable, Equatable {
     ) {
         self.id = id
         self.name = name
-        self.personality = personality
-        self.catchphrase = catchphrase
+        self.personality = prompt
+        self.catchphrase = ""
         self.assetFileName = assetFileName
         self.assetKind = assetKind
         self.spriteSpecID = spriteSpecID
@@ -71,7 +90,12 @@ struct PetRecord: Identifiable, Codable, Equatable {
     }
 
     var profile: PetProfile {
-        PetProfile(id: id, name: name, personality: personality, catchphrase: catchphrase)
+        PetProfile(id: id, name: name, prompt: prompt)
+    }
+
+    var prompt: String {
+        get { personality }
+        set { personality = newValue }
     }
 
     var sortedMessages: [ChatRecord] {
@@ -81,6 +105,7 @@ struct PetRecord: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case name
+        case prompt
         case personality
         case catchphrase
         case assetFileName
@@ -99,8 +124,18 @@ struct PetRecord: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        personality = try container.decode(String.self, forKey: .personality)
-        catchphrase = try container.decode(String.self, forKey: .catchphrase)
+        if let prompt = try container.decodeIfPresent(String.self, forKey: .prompt) {
+            personality = prompt
+        } else {
+            let legacyPersonality = try container.decodeIfPresent(String.self, forKey: .personality) ?? ""
+            let legacyCatchphrase = try container.decodeIfPresent(String.self, forKey: .catchphrase) ?? ""
+            personality = PetPromptText.legacyPrompt(
+                name: name,
+                personality: legacyPersonality,
+                catchphrase: legacyCatchphrase
+            )
+        }
+        catchphrase = ""
         assetFileName = try container.decode(String.self, forKey: .assetFileName)
         assetKind = try container.decode(PetAssetKind.self, forKey: .assetKind)
         spriteSpecID = try container.decode(String.self, forKey: .spriteSpecID)
@@ -111,6 +146,23 @@ struct PetRecord: Identifiable, Codable, Equatable {
         isBundled = try container.decodeIfPresent(Bool.self, forKey: .isBundled) ?? false
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         messages = try container.decodeIfPresent([ChatRecord].self, forKey: .messages) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(prompt, forKey: .prompt)
+        try container.encode(assetFileName, forKey: .assetFileName)
+        try container.encode(assetKind, forKey: .assetKind)
+        try container.encode(spriteSpecID, forKey: .spriteSpecID)
+        try container.encode(isActive, forKey: .isActive)
+        try container.encode(windowX, forKey: .windowX)
+        try container.encode(windowY, forKey: .windowY)
+        try container.encode(scale, forKey: .scale)
+        try container.encode(isBundled, forKey: .isBundled)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(messages, forKey: .messages)
     }
 }
 
@@ -185,6 +237,14 @@ final class PetEntity {
         get { PetAssetKind(rawValue: assetKindRaw) ?? .spriteSheet }
         set { assetKindRaw = newValue.rawValue }
     }
+
+    var prompt: String {
+        get { personality }
+        set {
+            personality = newValue
+            catchphrase = ""
+        }
+    }
 }
 
 @Model
@@ -220,8 +280,7 @@ extension PetRecord {
         self.init(
             id: entity.id,
             name: entity.name,
-            personality: entity.personality,
-            catchphrase: entity.catchphrase,
+            prompt: entity.prompt,
             assetFileName: entity.assetFileName,
             assetKind: entity.assetKind,
             spriteSpecID: entity.spriteSpecID,

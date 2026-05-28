@@ -12,14 +12,12 @@ final class PetStoreTests: XCTestCase {
 
         let first = try store.createPet(
             name: "Mainey",
-            personality: "黏人",
-            catchphrase: "喵呜",
+            prompt: "你是 Mainey，一只黏人的桌面宠物。",
             sourceURL: nil
         )
         let second = try store.createPet(
             name: "灰灰",
-            personality: "温柔",
-            catchphrase: "在呢",
+            prompt: "你是灰灰，说话温柔简短。",
             sourceURL: nil
         )
 
@@ -39,8 +37,7 @@ final class PetStoreTests: XCTestCase {
         let store = PetStore(modelContainer: container, legacyJSONURL: nil)
         let pet = try store.createPet(
             name: "Mainey",
-            personality: "黏人",
-            catchphrase: "喵呜",
+            prompt: "你是 Mainey，一只黏人的桌面宠物。",
             sourceURL: nil
         )
 
@@ -72,8 +69,7 @@ final class PetStoreTests: XCTestCase {
         store.ensureSeedPetIfNeeded()
         let pet = try store.createPet(
             name: "自定义",
-            personality: "活泼",
-            catchphrase: "嘿",
+            prompt: "你很活泼。",
             sourceURL: nil
         )
 
@@ -90,13 +86,64 @@ final class PetStoreTests: XCTestCase {
 
         let pet = try store.createPet(
             name: "自定义",
-            personality: "活泼",
-            catchphrase: "嘿",
+            prompt: "你很活泼。",
             sourceURL: nil
         )
 
         XCTAssertEqual(pet.assetKind, .spriteSheet)
         XCTAssertEqual(store.pet(with: pet.id)?.assetKind, .spriteSheet)
+    }
+
+    func testCreatedPetStoresPromptAndClearsLegacyCatchphrase() throws {
+        let container = try makeInMemoryContainer()
+        let store = PetStore(modelContainer: container, legacyJSONURL: nil)
+
+        let pet = try store.createPet(
+            name: "小灰",
+            prompt: "你是小灰，喜欢坐在屏幕角落安静陪伴用户。",
+            sourceURL: nil
+        )
+
+        XCTAssertEqual(pet.name, "小灰")
+        XCTAssertEqual(pet.prompt, "你是小灰，喜欢坐在屏幕角落安静陪伴用户。")
+        XCTAssertEqual(pet.catchphrase, "")
+        XCTAssertEqual(store.pet(with: pet.id)?.profile.prompt, pet.prompt)
+    }
+
+    func testPetPromptCannotExceedLimit() throws {
+        let container = try makeInMemoryContainer()
+        let store = PetStore(modelContainer: container, legacyJSONURL: nil)
+        let longPrompt = String(repeating: "设", count: 2001)
+
+        XCTAssertThrowsError(try store.createPet(
+            name: "长设定",
+            prompt: longPrompt,
+            sourceURL: nil
+        )) { error in
+            XCTAssertEqual(error.localizedDescription, "设定最多 2000 字。")
+        }
+    }
+
+    func testStoreUpdatesPetNameAndPromptWithoutChangingAsset() throws {
+        let container = try makeInMemoryContainer()
+        let store = PetStore(modelContainer: container, legacyJSONURL: nil)
+        let pet = try store.createPet(
+            name: "旧名字",
+            prompt: "旧设定",
+            sourceURL: nil
+        )
+
+        try store.updatePetSettings(
+            pet.id,
+            name: "新名字",
+            prompt: "新设定：说话像认真工作的伙伴。"
+        )
+
+        let updated = try XCTUnwrap(store.pet(with: pet.id))
+        XCTAssertEqual(updated.name, "新名字")
+        XCTAssertEqual(updated.prompt, "新设定：说话像认真工作的伙伴。")
+        XCTAssertEqual(updated.assetFileName, pet.assetFileName)
+        XCTAssertEqual(updated.assetKind, pet.assetKind)
     }
 
     func testMigratesLegacyJSONIntoSwiftDataOnce() throws {
@@ -108,8 +155,7 @@ final class PetStoreTests: XCTestCase {
         let legacyPet = PetRecord(
             id: petID,
             name: "旧宠物",
-            personality: "怀旧",
-            catchphrase: "还在",
+            prompt: "你是旧宠物，喜欢怀旧。",
             assetFileName: "legacy.webp",
             assetKind: .spriteSheet,
             isActive: true,
@@ -125,6 +171,7 @@ final class PetStoreTests: XCTestCase {
 
         XCTAssertEqual(store.pets.count, 1)
         XCTAssertEqual(store.activePet?.id, petID)
+        XCTAssertEqual(store.activePet?.prompt, "你是旧宠物，喜欢怀旧。")
         XCTAssertEqual(store.activePet?.messages.first?.text, "我从 JSON 来")
         XCTAssertFalse(FileManager.default.fileExists(atPath: jsonURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: jsonURL.appendingPathExtension("migrated").path))
@@ -159,21 +206,23 @@ final class PetStoreTests: XCTestCase {
 
         XCTAssertEqual(store.pets.count, 1)
         XCTAssertEqual(store.activePet?.id.uuidString.uppercased(), petID.uppercased())
+        XCTAssertTrue(store.activePet?.prompt.contains("怀旧") == true)
+        XCTAssertTrue(store.activePet?.prompt.contains("还在") == true)
     }
 
     func testLocalMockReplyUsesPetVoiceAndStaysWithinBubbleLimit() async {
         let provider = LocalMockChatProvider()
-        let pet = PetProfile(name: "Mainey", personality: "黏人、爱鼓励人", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你黏人、爱鼓励人，说话会轻轻喵一声。")
 
         let reply = await provider.reply(to: "你好，今天写代码好累", pet: pet, history: [])
 
         XCTAssertLessThanOrEqual(reply.count, 50)
-        XCTAssertTrue(reply.contains("Mainey") || reply.contains("喵呜"))
+        XCTAssertTrue(reply.contains("Mainey") || reply.contains("喵"))
     }
 
     func testLocalMockReplyStreamsMultipleChunksToFinalReply() async throws {
         let provider = LocalMockChatProvider()
-        let pet = PetProfile(name: "Mainey", personality: "黏人、爱鼓励人", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你黏人、爱鼓励人。")
         let expected = await provider.reply(to: "你好", pet: pet, history: [])
         var chunks: [String] = []
 
@@ -191,7 +240,7 @@ final class PetStoreTests: XCTestCase {
             apiKey: "test-key",
             model: "MiniMax-M2.7"
         )
-        let pet = PetProfile(name: "Mainey", personality: "黏人", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你是 Mainey，黏人但不打扰，回复要简短温暖。")
         let history = [
             ChatTurn(role: .user, text: "上一句"),
             ChatTurn(role: .pet, text: "上一句回复")
@@ -219,6 +268,8 @@ final class PetStoreTests: XCTestCase {
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
         XCTAssertEqual(messages.map { $0["role"] }, ["system", "user", "assistant", "user"])
         XCTAssertTrue(messages[0]["content"]?.contains("Mainey") == true)
+        XCTAssertTrue(messages[0]["content"]?.contains("黏人但不打扰") == true)
+        XCTAssertFalse(messages[0]["content"]?.contains("口头禅") == true)
         XCTAssertEqual(messages.last?["content"], "你好")
     }
 
@@ -242,7 +293,7 @@ final class PetStoreTests: XCTestCase {
             apiKey: "test-key",
             model: "MiniMax-M2.7"
         )
-        let pet = PetProfile(name: "Mainey", personality: "黏人", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你是 Mainey，黏人但不打扰，回复要简短温暖。")
         let history = [
             ChatTurn(role: .user, text: "上一句"),
             ChatTurn(role: .pet, text: "上一句回复")
@@ -267,6 +318,8 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(json["stream"] as? Bool, true)
         XCTAssertEqual(json["max_tokens"] as? Int, 160)
         XCTAssertTrue((json["system"] as? String)?.contains("Mainey") == true)
+        XCTAssertTrue((json["system"] as? String)?.contains("黏人但不打扰") == true)
+        XCTAssertFalse((json["system"] as? String)?.contains("口头禅") == true)
 
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
         XCTAssertEqual(messages.map { $0["role"] }, ["user", "assistant", "user"])
@@ -327,7 +380,7 @@ final class PetStoreTests: XCTestCase {
         )
         let store = ChatSettingsStore(defaults: defaults, keychain: keychain)
         let provider = store.makeProvider()
-        let pet = PetProfile(name: "Mainey", personality: "黏人", catchphrase: "喵呜")
+        let pet = PetProfile(name: "Mainey", prompt: "你是 Mainey，回复要简短温暖。")
 
         do {
             for try await _ in provider.replyStream(to: "你好", pet: pet, history: []) {}
@@ -337,6 +390,46 @@ final class PetStoreTests: XCTestCase {
         }
 
         XCTAssertEqual(readCounter.count, 1)
+    }
+
+    func testChatSettingsAPIKeyCacheReadsKeychainOnlyOncePerStoredValue() throws {
+        let readCounter = ReadCounter()
+        let cache = APIKeyCache(keychain: APIKeychain(
+            readAPIKey: {
+                readCounter.increment()
+                return "secret-key"
+            },
+            saveAPIKey: { _ in },
+            deleteAPIKey: {}
+        ))
+
+        XCTAssertEqual(try cache.readAPIKey(), "secret-key")
+        XCTAssertEqual(try cache.readAPIKey(), "secret-key")
+        XCTAssertEqual(readCounter.count, 1)
+    }
+
+    func testChatSettingsAPIKeyCacheSerializesConcurrentReads() {
+        let readCounter = ReadCounter()
+        let cache = APIKeyCache(keychain: APIKeychain(
+            readAPIKey: {
+                readCounter.increment()
+                Thread.sleep(forTimeInterval: 0.03)
+                return "secret-key"
+            },
+            saveAPIKey: { _ in },
+            deleteAPIKey: {}
+        ))
+
+        DispatchQueue.concurrentPerform(iterations: 4) { _ in
+            let value = try? cache.readAPIKey()
+            XCTAssertEqual(value, "secret-key")
+        }
+
+        XCTAssertEqual(readCounter.count, 1)
+    }
+
+    func testDesktopPetLaunchPolicyKeepsDockEntryAvailable() {
+        XCTAssertEqual(DesktopPetActivationPolicy.launchPolicy, .regular)
     }
 
     func testActionEnginePrioritizesDirectionalDragAndReplyStates() {
@@ -388,17 +481,18 @@ final class PetStoreTests: XCTestCase {
     func testFloatingPetPanelFloatsAcrossSpacesAndFullscreenWithoutStationaryPinning() {
         let panel = FloatingPetPanel(
             contentRect: NSRect(x: 0, y: 0, width: 120, height: 120),
-            styleMask: [.borderless],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
 
         panel.configureForDesktopPet()
 
+        XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
         XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary))
-        XCTAssertTrue(panel.collectionBehavior.contains(.transient))
         XCTAssertTrue(panel.collectionBehavior.contains(.ignoresCycle))
+        XCTAssertFalse(panel.collectionBehavior.contains(.transient))
         XCTAssertFalse(panel.collectionBehavior.contains(.stationary))
         XCTAssertGreaterThan(panel.level.rawValue, NSWindow.Level.floating.rawValue)
     }
@@ -408,6 +502,12 @@ final class PetStoreTests: XCTestCase {
             isApplicationActive: false,
             isWindowKey: true,
             didAcceptFirstResponder: true
+        ))
+        XCTAssertFalse(DesktopInputFocusRetryPolicy.shouldRetry(
+            isApplicationActive: false,
+            isWindowKey: true,
+            didAcceptFirstResponder: true,
+            allowsNonActiveApplication: true
         ))
         XCTAssertTrue(DesktopInputFocusRetryPolicy.shouldRetry(
             isApplicationActive: true,
@@ -573,8 +673,7 @@ final class PetStoreTests: XCTestCase {
     func testFloatingAvatarSizeUsesTwoThirdsDesktopScaleForSpriteSheets() {
         let pet = PetRecord(
             name: "Mainey",
-            personality: "黏人",
-            catchphrase: "喵呜",
+            prompt: "你是 Mainey。",
             assetFileName: "missing.webp",
             assetKind: .spriteSheet
         )
