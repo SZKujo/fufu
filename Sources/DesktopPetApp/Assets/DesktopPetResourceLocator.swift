@@ -8,7 +8,7 @@ enum DesktopPetResourceLocator {
         withExtension fileExtension: String,
         mainBundleURL: URL = Bundle.main.bundleURL,
         mainResourceURL: URL? = Bundle.main.resourceURL,
-        moduleBundle: Bundle = .module
+        moduleBundle: () -> Bundle = { .module }
     ) -> URL? {
         let fileName = "\(name).\(fileExtension)"
         let packagedURLs = [
@@ -21,6 +21,6 @@ enum DesktopPetResourceLocator {
             return url
         }
 
-        return moduleBundle.url(forResource: name, withExtension: fileExtension)
+        return moduleBundle().url(forResource: name, withExtension: fileExtension)
     }
 }

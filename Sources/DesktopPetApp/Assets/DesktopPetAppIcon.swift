@@ -8,7 +8,7 @@ enum DesktopPetAppIcon {
     static func resourceURL(
         mainBundleURL: URL = Bundle.main.bundleURL,
         mainResourceURL: URL? = Bundle.main.resourceURL,
-        moduleBundle: Bundle = .module
+        moduleBundle: () -> Bundle = { .module }
     ) -> URL? {
         DesktopPetResourceLocator.resourceURL(
             forResource: resourceName,
