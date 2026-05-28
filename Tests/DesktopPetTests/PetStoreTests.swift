@@ -234,6 +234,23 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(chunks.joined(), expected)
     }
 
+    func testResourceLocatorPrefersPackagedAppResourcesBundle() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let resourceBundle = directory.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "DesktopPetIcon.png", directoryHint: .notDirectory)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: packagedURL)
+
+        let url = DesktopPetResourceLocator.resourceURL(
+            forResource: "DesktopPetIcon",
+            withExtension: "png",
+            mainBundleURL: directory,
+            mainResourceURL: directory
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
     func testDesktopPetAppIconUsesBundledPNGResource() throws {
         let url = try XCTUnwrap(DesktopPetAppIcon.resourceURL())
         XCTAssertEqual(url.lastPathComponent, "DesktopPetIcon.png")
