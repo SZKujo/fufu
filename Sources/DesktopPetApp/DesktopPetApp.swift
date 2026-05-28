@@ -7,7 +7,7 @@ struct DesktopPetApplication: App {
     @StateObject private var store = PetStore()
 
     init() {
-        NSApplication.shared.setActivationPolicy(DesktopPetActivationPolicy.launchPolicy)
+        DesktopPetApplicationBootstrap.configure()
     }
 
     var body: some Scene {

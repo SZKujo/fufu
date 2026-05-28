@@ -517,6 +517,35 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(DesktopPetActivationPolicy.launchPolicy, .regular)
     }
 
+    func testApplicationBootstrapAppliesLaunchPolicyAndIcon() {
+        var appliedPolicy: NSApplication.ActivationPolicy?
+        var appliedIcon: NSImage?
+        let icon = NSImage(size: NSSize(width: 4, height: 4))
+
+        DesktopPetApplicationBootstrap.configure(
+            setActivationPolicy: { appliedPolicy = $0 },
+            setApplicationIconImage: { appliedIcon = $0 },
+            iconImage: { icon }
+        )
+
+        XCTAssertEqual(appliedPolicy, .regular)
+        XCTAssertTrue(appliedIcon === icon)
+    }
+
+    func testApplicationBootstrapKeepsLaunchPolicyWhenIconIsMissing() {
+        var appliedPolicy: NSApplication.ActivationPolicy?
+        var didApplyIcon = false
+
+        DesktopPetApplicationBootstrap.configure(
+            setActivationPolicy: { appliedPolicy = $0 },
+            setApplicationIconImage: { _ in didApplyIcon = true },
+            iconImage: { nil }
+        )
+
+        XCTAssertEqual(appliedPolicy, .regular)
+        XCTAssertFalse(didApplyIcon)
+    }
+
     func testActionEnginePrioritizesDirectionalDragAndReplyStates() {
         var engine = PetActionEngine()
 
