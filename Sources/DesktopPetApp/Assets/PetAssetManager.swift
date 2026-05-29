@@ -1,6 +1,9 @@
 import Foundation
 
 enum PetAssetManager {
+    static let bundledMaineyResourceName = "MaineySpritesheet"
+    static let bundledMaineyResourceExtension = "webp"
+
     static var supportDirectory: URL {
         get throws {
             let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -27,6 +30,20 @@ enum PetAssetManager {
         return fileName
     }
 
+    static func bundledMaineySourceURL(
+        mainBundleURL: URL = Bundle.main.bundleURL,
+        mainResourceURL: URL? = Bundle.main.resourceURL,
+        moduleBundle: () -> Bundle = { .module }
+    ) -> URL? {
+        DesktopPetResourceLocator.resourceURL(
+            forResource: bundledMaineyResourceName,
+            withExtension: bundledMaineyResourceExtension,
+            mainBundleURL: mainBundleURL,
+            mainResourceURL: mainResourceURL,
+            moduleBundle: moduleBundle
+        )
+    }
+
     static func installBundledMaineyIfNeeded() throws -> String {
         let fileName = "mainey-spritesheet.webp"
         let destination = try assetURL(for: fileName)
@@ -34,7 +51,7 @@ enum PetAssetManager {
             return fileName
         }
 
-        guard let source = Bundle.module.url(forResource: "MaineySpritesheet", withExtension: "webp") else {
+        guard let source = bundledMaineySourceURL() else {
             throw CocoaError(.fileNoSuchFile)
         }
         try FileManager.default.copyItem(at: source, to: destination)

@@ -300,6 +300,30 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(url, packagedURL)
     }
 
+    func testPetAssetManagerFindsBundledMaineyInPackagedAppResourcesBundleWithoutModuleFallback() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let appURL = directory.appending(path: "DesktopPet.app", directoryHint: .isDirectory)
+        let resourcesURL = appURL
+            .appending(path: "Contents", directoryHint: .isDirectory)
+            .appending(path: "Resources", directoryHint: .isDirectory)
+        let resourceBundle = resourcesURL.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "MaineySpritesheet.webp", directoryHint: .notDirectory)
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: packagedURL)
+
+        let url = PetAssetManager.bundledMaineySourceURL(
+            mainBundleURL: appURL,
+            mainResourceURL: resourcesURL,
+            moduleBundle: {
+                XCTFail("Module fallback should not be evaluated for packaged resources")
+                return Bundle.main
+            }
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
     func testDesktopPetAppIconLoadsImageFromURL() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: directory) }
