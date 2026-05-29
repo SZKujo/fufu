@@ -261,6 +261,115 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(chunks.joined(), expected)
     }
 
+    func testResourceLocatorPrefersPackagedIconResourceBundle() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let resourceBundle = directory.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "DesktopPetIcon.png", directoryHint: .notDirectory)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: packagedURL)
+
+        let url = DesktopPetResourceLocator.resourceURL(
+            forResource: "DesktopPetIcon",
+            withExtension: "png",
+            mainBundleURL: directory,
+            mainResourceURL: directory
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
+    func testResourceLocatorDoesNotEvaluateModuleFallbackForPackagedAppResourcesBundle() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let resourceBundle = directory.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "DesktopPetIcon.png", directoryHint: .notDirectory)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: packagedURL)
+
+        let url = DesktopPetResourceLocator.resourceURL(
+            forResource: "DesktopPetIcon",
+            withExtension: "png",
+            mainBundleURL: directory,
+            mainResourceURL: directory,
+            moduleBundle: {
+                XCTFail("Module fallback should not be evaluated for packaged resources")
+                return Bundle.main
+            }
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
+    func testDesktopPetAppIconUsesBundledPNGResource() throws {
+        let url = try XCTUnwrap(DesktopPetAppIcon.resourceURL())
+        XCTAssertEqual(url.lastPathComponent, "DesktopPetIcon.png")
+        XCTAssertNotNil(DesktopPetAppIcon.iconImage(resourceURL: url))
+    }
+
+    func testDesktopPetAppIconDoesNotEvaluateModuleFallbackForPackagedAppResourcesBundle() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let resourceBundle = directory.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "DesktopPetIcon.png", directoryHint: .notDirectory)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: packagedURL)
+
+        let url = DesktopPetAppIcon.resourceURL(
+            mainBundleURL: directory,
+            mainResourceURL: directory,
+            moduleBundle: {
+                XCTFail("Module fallback should not be evaluated for packaged resources")
+                return Bundle.main
+            }
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
+    func testPetAssetManagerFindsBundledMaineyInPackagedAppResourcesBundleWithoutModuleFallback() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let appURL = directory.appending(path: "DesktopPet.app", directoryHint: .isDirectory)
+        let resourcesURL = appURL
+            .appending(path: "Contents", directoryHint: .isDirectory)
+            .appending(path: "Resources", directoryHint: .isDirectory)
+        let resourceBundle = resourcesURL.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: resourceBundle, withIntermediateDirectories: true)
+        let packagedURL = resourceBundle.appending(path: "MaineySpritesheet.webp", directoryHint: .notDirectory)
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: packagedURL)
+
+        let url = PetAssetManager.bundledMaineySourceURL(
+            mainBundleURL: appURL,
+            mainResourceURL: resourcesURL,
+            moduleBundle: {
+                XCTFail("Module fallback should not be evaluated for packaged resources")
+                return Bundle.main
+            }
+        )
+
+        XCTAssertEqual(url, packagedURL)
+    }
+
+    func testDesktopPetAppIconLoadsImageFromURL() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "test-icon.png", directoryHint: .notDirectory)
+        let image = NSImage(size: NSSize(width: 2, height: 2))
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: 2, height: 2).fill()
+        image.unlockFocus()
+        let tiffData = try XCTUnwrap(image.tiffRepresentation)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: tiffData))
+        let pngData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try pngData.write(to: url)
+        let loadedImage = try XCTUnwrap(DesktopPetAppIcon.iconImage(resourceURL: url))
+        XCTAssertEqual(Int(loadedImage.size.width), 2)
+        XCTAssertEqual(Int(loadedImage.size.height), 2)
+    }
+
     func testOpenAICompatibleRequestBuilderCreatesMiniMaxChatCompletionRequest() throws {
         let config = OpenAICompatibleChatConfiguration(
             baseURL: URL(string: "https://api.minimax.io/v1")!,
@@ -483,6 +592,35 @@ final class PetStoreTests: XCTestCase {
 
     func testDesktopPetLaunchPolicyKeepsDockEntryAvailable() {
         XCTAssertEqual(DesktopPetActivationPolicy.launchPolicy, .regular)
+    }
+
+    func testApplicationBootstrapAppliesLaunchPolicyAndIcon() {
+        var appliedPolicy: NSApplication.ActivationPolicy?
+        var appliedIcon: NSImage?
+        let icon = NSImage(size: NSSize(width: 4, height: 4))
+
+        DesktopPetApplicationBootstrap.configure(
+            setActivationPolicy: { appliedPolicy = $0 },
+            setApplicationIconImage: { appliedIcon = $0 },
+            iconImage: { icon }
+        )
+
+        XCTAssertEqual(appliedPolicy, .regular)
+        XCTAssertTrue(appliedIcon === icon)
+    }
+
+    func testApplicationBootstrapKeepsLaunchPolicyWhenIconIsMissing() {
+        var appliedPolicy: NSApplication.ActivationPolicy?
+        var didApplyIcon = false
+
+        DesktopPetApplicationBootstrap.configure(
+            setActivationPolicy: { appliedPolicy = $0 },
+            setApplicationIconImage: { _ in didApplyIcon = true },
+            iconImage: { nil }
+        )
+
+        XCTAssertEqual(appliedPolicy, .regular)
+        XCTAssertFalse(didApplyIcon)
     }
 
     func testActionEnginePrioritizesDirectionalDragAndReplyStates() {
