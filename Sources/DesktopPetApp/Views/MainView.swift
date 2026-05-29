@@ -178,13 +178,6 @@ private struct PetListRow: View {
                             .foregroundStyle(.green)
                     }
                 }
-                Text(pet.prompt.isEmpty ? "未填写设定" : pet.prompt)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                Text("素材：\(pet.assetFileName)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
 
             Spacer()

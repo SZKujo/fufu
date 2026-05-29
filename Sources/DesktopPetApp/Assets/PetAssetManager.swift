@@ -34,7 +34,7 @@ enum PetAssetManager {
             return fileName
         }
 
-        guard let source = Bundle.module.url(forResource: "MaineySpritesheet", withExtension: "webp") else {
+        guard let source = DesktopPetResourceLocator.resourceURL(forResource: "MaineySpritesheet", withExtension: "webp") else {
             throw CocoaError(.fileNoSuchFile)
         }
         try FileManager.default.copyItem(at: source, to: destination)

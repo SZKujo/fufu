@@ -103,19 +103,20 @@ struct FloatingPetHostView: View {
                             controller.handle(.replyingBegan)
                             hasStartedReplying = true
                         }
-                        controller.latestReply = reply
+                        controller.latestReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
                     }
                 }
 
                 await MainActor.run {
-                    if reply.isEmpty {
+                    let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedReply.isEmpty {
                         let fallback = "\(pet.name)挠挠头：刚才没想好，等等再试。"
                         store.appendMessage(.pet, text: fallback, to: pet.id)
                         controller.latestReply = fallback
                         controller.handle(.replyFailed)
                     } else {
-                        store.appendMessage(.pet, text: reply, to: pet.id)
-                        controller.latestReply = reply
+                        store.appendMessage(.pet, text: trimmedReply, to: pet.id)
+                        controller.latestReply = trimmedReply
                         controller.handle(.replySucceeded)
                     }
 

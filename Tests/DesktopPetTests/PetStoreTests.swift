@@ -94,6 +94,33 @@ final class PetStoreTests: XCTestCase {
         XCTAssertEqual(store.pet(with: pet.id)?.assetKind, .spriteSheet)
     }
 
+    func testSpriteSheetPromptReferenceLoadsBundledPrompt() throws {
+        let prompt = try SpriteSheetPromptReference.loadText()
+
+        XCTAssertEqual(SpriteSheetPromptReference.fileName, "how to create a spritesheet.md")
+        XCTAssertTrue(prompt.contains("Create a complete desktop pet spritesheet"))
+        XCTAssertTrue(prompt.contains("Rows and actions"))
+    }
+
+    func testResourceLocatorPrefersPackagedAppResourcesBundle() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let appURL = directory.appending(path: "DesktopPet.app", directoryHint: .isDirectory)
+        let resourcesURL = appURL.appending(path: "Contents/Resources", directoryHint: .isDirectory)
+        let bundleURL = resourcesURL.appending(path: DesktopPetResourceLocator.resourceBundleName, directoryHint: .isDirectory)
+        let fileURL = bundleURL.appending(path: "how to create a spritesheet.md", directoryHint: .notDirectory)
+        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
+        try Data("packaged prompt".utf8).write(to: fileURL)
+
+        let resolvedURL = DesktopPetResourceLocator.resourceURL(
+            forResource: "how to create a spritesheet",
+            withExtension: "md",
+            mainBundleURL: appURL,
+            mainResourceURL: resourcesURL
+        )
+
+        XCTAssertEqual(resolvedURL?.standardizedFileURL, fileURL.standardizedFileURL)
+    }
+
     func testCreatedPetStoresPromptAndClearsLegacyCatchphrase() throws {
         let container = try makeInMemoryContainer()
         let store = PetStore(modelContainer: container, legacyJSONURL: nil)
@@ -347,7 +374,7 @@ final class PetStoreTests: XCTestCase {
     func testChatSettingsStoreDoesNotReadKeychainOnInitializationOrProviderCreation() {
         let defaults = makeIsolatedDefaults()
         defaults.set(ChatProviderMode.anthropicCompatible.rawValue, forKey: "chat.mode")
-        defaults.set(true, forKey: "chat.hasAPIKey")
+        defaults.set(true, forKey: ChatSettingsStore.hasAPIKeyDefaultsKey)
         let readCounter = ReadCounter()
         let keychain = APIKeychain(
             readAPIKey: {
@@ -368,7 +395,7 @@ final class PetStoreTests: XCTestCase {
     func testChatSettingsProviderReadsKeychainOnlyWhenStreamingAndSurfacesReadError() async {
         let defaults = makeIsolatedDefaults()
         defaults.set(ChatProviderMode.anthropicCompatible.rawValue, forKey: "chat.mode")
-        defaults.set(true, forKey: "chat.hasAPIKey")
+        defaults.set(true, forKey: ChatSettingsStore.hasAPIKeyDefaultsKey)
         let readCounter = ReadCounter()
         let keychain = APIKeychain(
             readAPIKey: {
@@ -390,6 +417,32 @@ final class PetStoreTests: XCTestCase {
         }
 
         XCTAssertEqual(readCounter.count, 1)
+    }
+
+    func testChatSettingsDoesNotTreatLegacyKeychainFlagAsCurrentAPIKey() {
+        let defaults = makeIsolatedDefaults()
+        defaults.set(true, forKey: "chat.hasAPIKey")
+        defaults.set(true, forKey: "chat.hasAPIKey.keychain")
+
+        let store = ChatSettingsStore(defaults: defaults, keychain: APIKeychain(
+            readAPIKey: { "" },
+            saveAPIKey: { _ in },
+            deleteAPIKey: {}
+        ))
+
+        XCTAssertFalse(store.hasAPIKey)
+    }
+
+    func testAPIKeychainUsesBundleScopedServiceName() {
+        XCTAssertEqual(APIKeychain.service, "com.kujo.DesktopPet.ChatProvider")
+        XCTAssertNotEqual(APIKeychain.service, APIKeychain.legacyService)
+    }
+
+    func testKeychainInvalidOwnerEditMessageSuggestsLegacyItemConflict() {
+        let error = APIKeychain.KeychainError.unhandled(OSStatus(-25244))
+
+        XCTAssertTrue(error.localizedDescription.contains("旧版本"))
+        XCTAssertTrue(error.localizedDescription.contains("-25244"))
     }
 
     func testChatSettingsAPIKeyCacheReadsKeychainOnlyOncePerStoredValue() throws {

@@ -105,19 +105,21 @@ struct ChatPageView: View {
                             runtime.floatingController.handle(.replyingBegan)
                             hasStartedReplying = true
                         }
+                        let displayedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
                         streamingPetID = pet.id
-                        streamingReply = reply
-                        runtime.floatingController.latestReply = reply
+                        streamingReply = displayedReply
+                        runtime.floatingController.latestReply = displayedReply
                     }
                 }
 
                 await MainActor.run {
                     let finalReply: String
-                    if reply.isEmpty {
+                    let trimmedReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmedReply.isEmpty {
                         finalReply = "\(pet.name)挠挠头：刚才没想好，等等再试。"
                         runtime.floatingController.handle(.replyFailed)
                     } else {
-                        finalReply = reply
+                        finalReply = trimmedReply
                         runtime.floatingController.handle(.replySucceeded)
                     }
 
@@ -192,7 +194,7 @@ private struct ChatMessageRow: View {
                 Spacer(minLength: 80)
             }
 
-            Text(message.text)
+            Text(message.text.trimmingCharacters(in: .whitespacesAndNewlines))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(message.role == .user ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -210,7 +212,7 @@ private struct StreamingReplyRow: View {
 
     var body: some View {
         HStack {
-            Text(text)
+            Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))

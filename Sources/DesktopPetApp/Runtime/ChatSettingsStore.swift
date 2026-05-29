@@ -50,7 +50,7 @@ final class ChatSettingsStore: ObservableObject {
 
     private let defaults: UserDefaults
     private let apiKeyCache: APIKeyCache
-    private let hasAPIKeyDefaultsKey = "chat.hasAPIKey"
+    static let hasAPIKeyDefaultsKey = "chat.hasAPIKey.com.kujo.DesktopPet"
 
     init(
         defaults: UserDefaults = .standard,
@@ -62,7 +62,7 @@ final class ChatSettingsStore: ObservableObject {
         mode = storedMode
         baseURL = defaults.string(forKey: "chat.baseURL") ?? storedMode.defaultBaseURL
         model = defaults.string(forKey: "chat.model") ?? storedMode.defaultModel
-        hasAPIKey = defaults.bool(forKey: hasAPIKeyDefaultsKey) || defaults.bool(forKey: "chat.hasAPIKey.keychain")
+        hasAPIKey = defaults.bool(forKey: Self.hasAPIKeyDefaultsKey)
     }
 
     func makeProvider() -> any ChatProvider {
@@ -90,15 +90,15 @@ final class ChatSettingsStore: ObservableObject {
     func saveAPIKey(_ apiKey: String) throws {
         try apiKeyCache.saveAPIKey(apiKey)
         hasAPIKey = !apiKey.isEmpty
-        defaults.set(hasAPIKey, forKey: hasAPIKeyDefaultsKey)
-        defaults.set(hasAPIKey, forKey: "chat.hasAPIKey.keychain")
+        defaults.set(hasAPIKey, forKey: Self.hasAPIKeyDefaultsKey)
     }
 
     func clearAPIKey() throws {
         try apiKeyCache.clearAPIKey()
         hasAPIKey = false
-        defaults.set(false, forKey: hasAPIKeyDefaultsKey)
+        defaults.set(false, forKey: Self.hasAPIKeyDefaultsKey)
         defaults.set(false, forKey: "chat.hasAPIKey.keychain")
+        defaults.set(false, forKey: "chat.hasAPIKey")
     }
 
     private func save() {
@@ -188,8 +188,10 @@ struct APIKeychain: Sendable {
             return String(decoding: data, as: UTF8.self)
         },
         saveAPIKey: { value in
-            try deleteStoredAPIKey()
-            guard !value.isEmpty else { return }
+            guard !value.isEmpty else {
+                try deleteStoredAPIKey(service: service)
+                return
+            }
             let query: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service,
@@ -197,19 +199,48 @@ struct APIKeychain: Sendable {
                 kSecValueData as String: Data(value.utf8)
             ]
             let status = SecItemAdd(query as CFDictionary, nil)
-            guard status == errSecSuccess else {
+            switch status {
+            case errSecSuccess:
+                return
+            case errSecDuplicateItem:
+                try updateStoredAPIKey(value, service: service)
+            case errSecUserCanceled:
+                throw KeychainError.userCanceled
+            default:
                 throw KeychainError.unhandled(status)
             }
         },
         deleteAPIKey: {
-            try deleteStoredAPIKey()
+            try deleteStoredAPIKey(service: service)
+            try? deleteStoredAPIKey(service: legacyService)
         }
     )
 
-    private static let service = "DesktopPet.ChatProvider"
-    private static let account = "OpenAICompatibleAPIKey"
+    static let service = "com.kujo.DesktopPet.ChatProvider"
+    static let legacyService = "DesktopPet.ChatProvider"
+    static let account = "OpenAICompatibleAPIKey"
 
-    private static func deleteStoredAPIKey() throws {
+    private static func updateStoredAPIKey(_ value: String, service: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: Data(value.utf8)
+        ]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        switch status {
+        case errSecSuccess:
+            return
+        case errSecUserCanceled:
+            throw KeychainError.userCanceled
+        default:
+            throw KeychainError.unhandled(status)
+        }
+    }
+
+    private static func deleteStoredAPIKey(service: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -230,7 +261,11 @@ struct APIKeychain: Sendable {
             case .userCanceled:
                 "钥匙串访问被拒绝。需要允许桌面宠物读取 API Key，或重新保存 Key。"
             case .unhandled(let status):
-                "钥匙串操作失败：\(status)"
+                if status == OSStatus(-25244) {
+                    "钥匙串操作失败：\(status)。这通常是旧版本或调试版留下的钥匙串项目和当前 App 签名冲突，请用新版 App 重新保存 Key。"
+                } else {
+                    "钥匙串操作失败：\(status)"
+                }
             }
         }
     }

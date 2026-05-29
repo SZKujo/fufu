@@ -1,4 +1,3 @@
-how to create a spritesheet
 Create a complete desktop pet spritesheet based on the attached character reference image.
 Reference image role: use the attached image to preserve the character's identity, hairstyle, outfit, facial features, colors, and overall vibe. If the reference is half-body, complete it into a consistent full-body character.
 

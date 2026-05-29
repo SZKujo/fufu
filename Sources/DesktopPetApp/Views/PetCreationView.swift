@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -17,12 +18,8 @@ struct PetCreationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("创建宠物")
-                    .font(.title2.weight(.semibold))
-                Text("上传 Codex 风格 9 行 spritesheet，动作会按预设规则读取。")
-                    .foregroundStyle(.secondary)
-            }
+            Text("创建宠物")
+                .font(.title2.weight(.semibold))
 
             Form {
                 TextField("名字", text: $name)
@@ -120,6 +117,9 @@ struct PetCreationView: View {
 }
 
 private struct AssetRequirementHintView: View {
+    @State private var referenceSheet: SpriteSheetPromptSheet?
+    @State private var referenceError: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("素材建议", systemImage: "list.bullet.rectangle")
@@ -130,11 +130,94 @@ private struct AssetRequirementHintView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(8)
+
+            Button {
+                openReference()
+            } label: {
+                Label("生图提示词参考", systemImage: "doc.text.magnifyingglass")
+                    .font(.caption.weight(.medium))
+            }
+            .buttonStyle(.link)
+
+            if let referenceError {
+                Text(referenceError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
         }
         .padding(.vertical, 4)
+        .sheet(item: $referenceSheet) { sheet in
+            SpriteSheetPromptReferenceView(prompt: sheet.prompt)
+        }
     }
 
     private var spriteSheetText: String {
         "WebP sprite 图按 9 行读取：1 待机，2 向右拖动，3 向左拖动，4 唤醒打招呼，5 鼠标悬停，6 回复出错，7 回复完成，8 思考中，9 回复中。每行可放多帧，透明背景效果最好。"
+    }
+
+    private func openReference() {
+        do {
+            let prompt = try SpriteSheetPromptReference.loadText()
+            referenceError = nil
+            referenceSheet = SpriteSheetPromptSheet(prompt: prompt)
+        } catch {
+            referenceError = error.localizedDescription
+        }
+    }
+}
+
+private struct SpriteSheetPromptSheet: Identifiable {
+    let id = UUID()
+    let prompt: String
+}
+
+private struct SpriteSheetPromptReferenceView: View {
+    let prompt: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var didCopy = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("生图提示词参考")
+                        .font(.headline)
+                    Text(SpriteSheetPromptReference.fileName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    copyPrompt()
+                } label: {
+                    Label(didCopy ? "已复制" : "复制", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                }
+
+                Button("关闭") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(14)
+
+            Divider()
+
+            ScrollView {
+                Text(prompt)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(18)
+            }
+        }
+        .frame(minWidth: 720, minHeight: 560)
+    }
+
+    private func copyPrompt() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(prompt, forType: .string)
+        didCopy = true
     }
 }
