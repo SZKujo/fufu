@@ -11,7 +11,7 @@ struct DesktopPetApplication: App {
     }
 
     var body: some Scene {
-        WindowGroup("桌面宠物", id: "main") {
+        WindowGroup("浮浮", id: "main") {
             MainView()
                 .environmentObject(runtime)
                 .environmentObject(store)
@@ -24,7 +24,7 @@ struct DesktopPetApplication: App {
             CommandGroup(replacing: .newItem) {}
         }
 
-        MenuBarExtra("桌宠", systemImage: "pawprint.fill") {
+        MenuBarExtra("浮浮", systemImage: "pawprint.fill") {
             MenuBarContentView()
                 .environmentObject(runtime)
                 .environmentObject(store)

@@ -7,9 +7,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.kujo.DesktopPet</string>
 	<key>CFBundleName</key>
-	<string>桌面宠物</string>
+	<string>浮浮</string>
 	<key>CFBundleDisplayName</key>
-	<string>桌面宠物</string>
+	<string>浮浮</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleIconFile</key>

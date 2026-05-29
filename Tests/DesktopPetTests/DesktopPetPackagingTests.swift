@@ -14,6 +14,8 @@ final class DesktopPetPackagingTests: XCTestCase {
 
         XCTAssertEqual(plist["CFBundleIconFile"] as? String, "DesktopPetIcon")
         XCTAssertEqual(plist["CFBundleExecutable"] as? String, "DesktopPet")
+        XCTAssertEqual(plist["CFBundleDisplayName"] as? String, "浮浮")
+        XCTAssertEqual(plist["CFBundleName"] as? String, "浮浮")
         XCTAssertEqual(plist["CFBundlePackageType"] as? String, "APPL")
     }
 
